@@ -1,4 +1,4 @@
-package main
+package reflect_1
 
 import (
 	"fmt"

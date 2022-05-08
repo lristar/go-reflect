@@ -1,9 +1,10 @@
-package reflect_1
+package main
 
 import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -34,9 +35,9 @@ var GFactory = &Container{singleton: map[string]interface{}{}}
 
 // 写入方法
 
-func (c *Container) SetSingleton(key string, v interface{}) {
+func (c *Container) SetSingleton(v interface{}) {
 	c.Lock()
-	c.singleton[key] = v
+	c.singleton[GetStructName(v)] = v
 	c.Unlock()
 }
 
@@ -79,7 +80,9 @@ func (c *Container) EntryValue(v reflect.Value) error {
 				if err != nil {
 					return err
 				}
-				c.EntryValue(reflect.ValueOf(fun))
+				if err := c.EntryValue(reflect.ValueOf(fun)); err != nil {
+					return err
+				}
 				values.Field(i).Set(reflect.ValueOf(fun))
 				fmt.Println("注入了", types.Field(i), "-", reflect.ValueOf(fun).Type())
 			} else {
@@ -90,12 +93,26 @@ func (c *Container) EntryValue(v reflect.Value) error {
 	return nil
 }
 
+func Override(root interface{}, v ...interface{}) error {
+	GFactory.SetSingleton(root)
+	for _, values := range v {
+		GFactory.SetSingleton(values)
+	}
+	err := GFactory.Entry(root)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func GetStructName(v interface{}) string {
+	names := reflect.TypeOf(v).String()
+	name := strings.Split(names, ".")
+	return name[len(name)-1]
+}
+
 func Init() {
-	GFactory.SetSingleton("Service", &Service{Name: "张三"})
-	GFactory.SetSingleton("Controller", &Controller{})
 	ctlFactory := &Factory{}
-	GFactory.SetSingleton("CtrlFactory", ctlFactory)
-	err := GFactory.Entry(ctlFactory)
+	err := Override(ctlFactory, &Service{Name: "张三"}, &Controller{})
 	if err != nil {
 		return
 	}
@@ -103,11 +120,11 @@ func Init() {
 
 func main() {
 	Init()
-	svc, err := GFactory.GetSingleton("Service")
+	fac, err := GFactory.GetSingleton("Factory")
 	if err != nil {
 		fmt.Println("失败")
 		return
 	}
-	fu := svc.(*Service)
-	fmt.Println(fu.Name)
+	fu := fac.(*Factory)
+	fu.CController.CService.Hello()
 }
